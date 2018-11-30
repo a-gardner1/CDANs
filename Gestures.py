@@ -8,7 +8,6 @@ import csv
 import numpy as np
 import time
 
-from MyLSTM import LSTMRNN
 from theano import *
 import theano.tensor as T
 from keras.models import Sequential, model_from_json
@@ -337,7 +336,7 @@ def comprehensiveEvaluation(directory = defaultDirectory(),
                                 totalPer = 1, batchSize = 64,
                                 numEpochs = 1000, learningRate = 0.001, 
                                 l2Reg = 0.0001, modelFile = None,
-                                useKeras = True, useGRU = False,
+                                useGRU = False,
                                 dropoutI = 0.2, dropoutH=0.2, 
                                 trainMode = 'continue', randSeed2 = None):
     """
@@ -369,7 +368,7 @@ def comprehensiveEvaluation(directory = defaultDirectory(),
                     testRange = struct[4], numClasses = struct[5],
                     numObservations = struct[6], numSequences = struct[7],
                     numFeatures = struct[8],
-                    useKeras=useKeras, modelFile=modelFile, 
+                    modelFile=modelFile, 
                     trainMode=trainMode,
                     callbacks = [EarlyStopping(patience=20)])
 
@@ -380,7 +379,7 @@ def comprehensiveLOOEvaluation(directory=defaultDirectory(),
                                totalPer = 1, batchSize = 64,
                                numEpochs = 1000, learningRate = 0.001, 
                                l2Reg = 0.0001, modelFilePrefix = '',
-                               useKeras = True, useGRU = False,
+                               useGRU = False,
                                dropoutI = 0.2, dropoutH = 0.2, trainMode = 'continue',
                                randSeed2 = None, center = False, prependMean = False):
     """
@@ -422,8 +421,8 @@ def comprehensiveLOOEvaluation(directory=defaultDirectory(),
                                   trainPer, valPer, testPer, totalPer, dropoutI, dropoutH, l2Reg,
                                   center, prependMean)
         u += 1
-        if (os.path.isfile(outDirectory + '\\' + ('Keras' if useKeras else 'My')+modelFile+'.json') 
-            and os.path.isfile(outDirectory + '\\' + ('Keras' if useKeras else 'My')+modelFile+'_Weights.h5')):
+        if (os.path.isfile(outDirectory + '\\' + 'Keras' + modelFile + '.json') 
+            and os.path.isfile(outDirectory + '\\' +  'Keras' + modelFile + '_Weights.h5')):
             #if we have already trained for leaving out this user
             if trainMode == 'continue': #continue until each user has a model
                 trainMode2 = 'skip' 
@@ -456,7 +455,7 @@ def comprehensiveLOOEvaluation(directory=defaultDirectory(),
                                                              testRange = struct[4], numClasses = struct[5],
                                                              numObservations = struct[6], numSequences = struct[7],
                                                              numFeatures = struct[8],
-                                                             useKeras=useKeras, modelFile=modelFile, 
+                                                              modelFile=modelFile, 
                                                              outDirectory=outDirectory, trainMode=trainMode2,
                                                              callbacks = [EarlyStopping(patience=20)])
         #catch our breath.... Really, give the user a chance to insert Ctrl-C
@@ -503,7 +502,7 @@ def trainGestureRNN(numLayers, numNodesPerLayer, useGRU, batchSize,
                     numEpochs, learningRate, l1Reg, l2Reg, dropoutI, dropoutH,
                     sequences, classes, trainRange, valRange, testRange,
                     numClasses, numObservations, numSequences, numFeatures,
-                    useKeras, modelFile, callbacks = None, 
+                    modelFile, callbacks = None, 
                     outDirectory = '', trainMode = 'continue'):
     """
     Returns True if training was completed, False if interrupted.
@@ -513,132 +512,93 @@ def trainGestureRNN(numLayers, numNodesPerLayer, useGRU, batchSize,
     if trainMode.lower() not in trainModes:
         raise ValueError("Parameter 'trainMode' must be one of 'continue', 'overwrite', or 'skip'")
     
-    if (dropoutI or dropoutH) and not useKeras:
-        raise ValueError('Dropout regularization is not currently supported with MyLSTM.')
-    
     if dropoutI < 0 or dropoutH < 0 or l2Reg < 0 or l1Reg < 0:
         raise ValueError('Regularization parameters must be non-negative.')
-    
-    if callbacks is not None and not useKeras:
-        sys.stderr.write('Warning: Early stopping parameter has no effect on MyLSTM')
     
     if outDirectory is not None and outDirectory != '':
         outDirectory = outDirectory + '\\'
     else:
         outDirectory = ''
     # initialize, compile, and train model
-    if useKeras:
-        #finish preparing data
-        #class labels must be made into binary arrays
-        binaryClasses = np.zeros((numObservations, numSequences, numClasses))
-        # tell cost function which timesteps to ignore
-        sampleWeights = np.ones((numObservations, numSequences))
-        #eh...just use for loops
-        for i in range(numObservations):
-            for j in range(numSequences):
-                if classes[i,j] >= 0:
-                    binaryClasses[i,j, classes[i,j]] = 1
-                else:
-                    sampleWeights[i,j] = 0
-        sequences = sequences.transpose((1,0,2))
-        binaryClasses = binaryClasses.transpose((1,0,2))
-        sampleWeights = sampleWeights.T
+    #finish preparing data
+    #class labels must be made into binary arrays
+    binaryClasses = np.zeros((numObservations, numSequences, numClasses))
+    # tell cost function which timesteps to ignore
+    sampleWeights = np.ones((numObservations, numSequences))
+    #eh...just use for loops
+    for i in range(numObservations):
+        for j in range(numSequences):
+            if classes[i,j] >= 0:
+                binaryClasses[i,j, classes[i,j]] = 1
+            else:
+                sampleWeights[i,j] = 0
+    sequences = sequences.transpose((1,0,2))
+    binaryClasses = binaryClasses.transpose((1,0,2))
+    sampleWeights = sampleWeights.T
         
-        trainData = [sequences[trainRange,:,:], binaryClasses[trainRange,:,:], sampleWeights[trainRange, :]]
-        valData = [sequences[valRange,:,:], binaryClasses[valRange,:,:], sampleWeights[valRange, :]]
-        testData = [sequences[testRange, :, :], binaryClasses[testRange, :, :], sampleWeights[testRange, :]]
+    trainData = [sequences[trainRange,:,:], binaryClasses[trainRange,:,:], sampleWeights[trainRange, :]]
+    valData = [sequences[valRange,:,:], binaryClasses[valRange,:,:], sampleWeights[valRange, :]]
+    testData = [sequences[testRange, :, :], binaryClasses[testRange, :, :], sampleWeights[testRange, :]]
         
-        modelFile = outDirectory + 'Keras'+modelFile
-        weightsFile = modelFile+'_Weights'
-        completedEpochs = 0
-        if (trainMode == 'overwrite') or (not os.path.isfile(modelFile+'.json') or not os.path.isfile(weightsFile+'.h5')):
-            model = Sequential()
-            #add masking layer to indicate dummy timesteps
-            model.add(Masking(0, input_shape=(numObservations, numFeatures)))
-            if dropoutI:
-                model.add(Dropout(dropoutI))
-            for i in range(numLayers):
-                if useGRU:
-                    model.add(GRU(output_dim=numNodesPerLayer, return_sequences=True,
-                                   W_regularizer=l2(l2Reg)))
-                else:
-                    model.add(LSTM(output_dim=numNodesPerLayer, return_sequences=True,
-                                   W_regularizer=l2(l2Reg)))
-                if dropoutH:
-                    model.add(Dropout(dropoutH))
-            model.add(TimeDistributed(Dense(output_dim=numClasses, activation='softmax', 
-                                            W_regularizer = l2(l2Reg))))
-        else:
-            model = model_from_json(open(modelFile+'.json', 'rb').read())
-            model.load_weights(weightsFile+'.h5')
-        
-        #compile model and training objective function
-        sgd = SGD(lr=learningRate)
-        rms = RMSprop(lr=learningRate)
-        adagrad = Adagrad(lr=learningRate)
-        model.compile(loss='categorical_crossentropy', optimizer=rms,
-                      sample_weight_mode='temporal', metrics=['accuracy'])
-        checkp = [ModelCheckpoint(weightsFile + '.h5', save_best_only = True)]
-        if callbacks is None:
-            callbacks = checkp
-        else:
-            callbacks += checkp
-        try:
-            if trainMode != 'skip':
-                completedEpochs = model.fit(x=trainData[0], y=trainData[1], sample_weight=trainData[2],
-                                            validation_data = valData, batch_size = batchSize, 
-                                            nb_epoch = numEpochs, callbacks = callbacks,
-                                            verbose = 2)
-                completedEpochs = len(completedEpochs.history['loss'])
-        except KeyboardInterrupt:
-            if(not queryUser('Training interrupted. Compute test statistics?')):
-                return 0, float('nan'), float('nan'), float('nan') 
-        #retrieve the best weights based upon validation set loss
-        if os.path.isfile(weightsFile+'.h5'):
-            model.load_weights(weightsFile+'.h5')
-        scores = model.test_on_batch(x=testData[0], y=testData[1], sample_weight=testData[2])
-        predictedClasses = model.predict_classes(x=testData[0])
-        scores[1] = accuracy(classes[:, testRange].T, predictedClasses)
-        scores.append(balancedAccuracy(classes[:, testRange].T, predictedClasses))
-        scores.append(weightedAccuracy(classes[:, testRange].T, predictedClasses, forgetFactor=0))
-        print("Test loss of %.5f\nFrame-wise accuracy of %.5f\nSequence-wise accuracy of %.5f\nFinal frame accuracy of %0.5f" % (scores[0], scores[1], scores[2], scores[3]))
-        if trainMode != 'skip':
-            modelString = model.to_json()
-            open(modelFile + '.json', 'wb').write(modelString)
-            model.save_weights(weightsFile + '.h5', overwrite=True)
-            print('Model and weights saved to %s and %s.' % (modelFile+'.json', weightsFile+'.h5'))
+    modelFile = outDirectory + 'Keras'+modelFile
+    weightsFile = modelFile+'_Weights'
+    completedEpochs = 0
+    if (trainMode == 'overwrite') or (not os.path.isfile(modelFile+'.json') or not os.path.isfile(weightsFile+'.h5')):
+        model = Sequential()
+        #add masking layer to indicate dummy timesteps
+        model.add(Masking(0, input_shape=(numObservations, numFeatures)))
+        if dropoutI:
+            model.add(Dropout(dropoutI))
+        for i in range(numLayers):
+            if useGRU:
+                model.add(GRU(output_dim=numNodesPerLayer, return_sequences=True,
+                                W_regularizer=l2(l2Reg)))
+            else:
+                model.add(LSTM(output_dim=numNodesPerLayer, return_sequences=True,
+                                W_regularizer=l2(l2Reg)))
+            if dropoutH:
+                model.add(Dropout(dropoutH))
+        model.add(TimeDistributed(Dense(output_dim=numClasses, activation='softmax', 
+                                        W_regularizer = l2(l2Reg))))
     else:
-        # finish preparing data
-        # data must be placed into shared variables
-        def createSharedDataset(sequences, classes, borrow=True):
-            sharedSequences = theano.shared(value = sequences.astype(theano.config.floatX), borrow = borrow)
-            sharedClasses = theano.shared(value = classes.astype(theano.config.floatX), borrow = borrow)
-            sharedClasses = T.cast(sharedClasses, 'int32')
-            return [sharedSequences, sharedClasses]
-            
-        trainData = createSharedDataset(sequences[:, trainRange, :], classes[:, trainRange])
-        valData = createSharedDataset(sequences[:, valRange, :], classes[:, valRange])
-        testData = createSharedDataset(sequences[:, testRange, :], classes[:, testRange])
+        model = model_from_json(open(modelFile+'.json', 'rb').read())
+        model.load_weights(weightsFile+'.h5')
         
-        x = T.ftensor3('input')
-        modelFile = outDirectory + 'My'+modelFile
-        if (trainMode == 'overwrite') or (os.path.isfile(modelFile+'.pkl')):
-            lstm = pickle.load(open(modelFile+'.pkl'))
-        else:
-            lstm = LSTMRNN(x, numFeatures, numLayers, numNodesPerLayer, numClasses)
-        try:
-            if trainMode != 'skip':
-                completedEpochs = lstm.train_sgd(trainData, valData, testData, 
-                                                 l1Reg = 0, l2Reg = l2Reg, batchSize = batchSize, 
-                                                 learningRate = learningRate, numEpochs = numEpochs)
-        except KeyboardInterrupt:
-            if(not queryUser('Training interrupted. Save current progress?')):
-                print('Cleaning up...')
-                return 0, float('nan'), float('nan'), float('nan'), float('nan')
-        predictedClasses = lstm.predict(testData[0])
-        scores = [float('nan'), float('nan'), float('nan'), float('nan')] # accuracy not implemented
+    #compile model and training objective function
+    sgd = SGD(lr=learningRate)
+    rms = RMSprop(lr=learningRate)
+    adagrad = Adagrad(lr=learningRate)
+    model.compile(loss='categorical_crossentropy', optimizer=rms,
+                    sample_weight_mode='temporal', metrics=['accuracy'])
+    checkp = [ModelCheckpoint(weightsFile + '.h5', save_best_only = True)]
+    if callbacks is None:
+        callbacks = checkp
+    else:
+        callbacks += checkp
+    try:
         if trainMode != 'skip':
-            lstm.save(modelFile)
+            completedEpochs = model.fit(x=trainData[0], y=trainData[1], sample_weight=trainData[2],
+                                        validation_data = valData, batch_size = batchSize, 
+                                        nb_epoch = numEpochs, callbacks = callbacks,
+                                        verbose = 2)
+            completedEpochs = len(completedEpochs.history['loss'])
+    except KeyboardInterrupt:
+        if(not queryUser('Training interrupted. Compute test statistics?')):
+            return 0, float('nan'), float('nan'), float('nan') 
+    #retrieve the best weights based upon validation set loss
+    if os.path.isfile(weightsFile+'.h5'):
+        model.load_weights(weightsFile+'.h5')
+    scores = model.test_on_batch(x=testData[0], y=testData[1], sample_weight=testData[2])
+    predictedClasses = model.predict_classes(x=testData[0])
+    scores[1] = accuracy(classes[:, testRange].T, predictedClasses)
+    scores.append(balancedAccuracy(classes[:, testRange].T, predictedClasses))
+    scores.append(weightedAccuracy(classes[:, testRange].T, predictedClasses, forgetFactor=0))
+    print("Test loss of %.5f\nFrame-wise accuracy of %.5f\nSequence-wise accuracy of %.5f\nFinal frame accuracy of %0.5f" % (scores[0], scores[1], scores[2], scores[3]))
+    if trainMode != 'skip':
+        modelString = model.to_json()
+        open(modelFile + '.json', 'wb').write(modelString)
+        model.save_weights(weightsFile + '.h5', overwrite=True)
+        print('Model and weights saved to %s and %s.' % (modelFile+'.json', weightsFile+'.h5'))
     return completedEpochs, scores[0], scores[1], scores[2], scores[3]
 
 def nameModelFile(prefix, useGRU, numLayers, numNodesPerLayer,

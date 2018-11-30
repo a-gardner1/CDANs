@@ -1,0 +1,6 @@
+[submodule "Data/Posture"]
+	path = Data/Posture
+	url = https://github.com/a-gardner1/UnlabeledPostures.git
+[submodule "Data/Gesture"]
+	path = Data/Gesture
+	url = https://github.com/a-gardner1/UnlabeledGestures.git
